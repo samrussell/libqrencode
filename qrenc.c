@@ -27,6 +27,7 @@
 #include <string.h>
 #include <png.h>
 #include <getopt.h>
+#include <SDL/SDL.h>
 
 #include "qrencode.h"
 
@@ -57,7 +58,8 @@ enum imageType {
 	ASCII_TYPE,
 	ASCIIi_TYPE,
 	UTF8_TYPE,
-	ANSIUTF8_TYPE
+	ANSIUTF8_TYPE,
+        SDL_TYPE
 };
 
 static enum imageType image_type = PNG_TYPE;
@@ -795,6 +797,45 @@ static int writeASCII(QRcode *qrcode, const char *outfile, int invert)
 	return 0;
 }
 
+static int writeSDL(QRcode *qrcode)
+{
+	unsigned char *row;
+	int x, y, xx, yy;
+        /* init SDL */
+
+        SDL_Init(SDL_INIT_VIDEO);
+        SDL_Surface *screen = SDL_SetVideoMode(qrcode->width*8, qrcode->width*8, 32, SDL_SWSURFACE);
+
+#ifdef TEST_SDL_LOCK_OPTS
+  EM_ASM("SDL.defaults.copyOnLock = false; SDL.defaults.discardOnLock = true; SDL.defaults.opaqueFrontBuffer = false;");
+#endif
+        if (SDL_MUSTLOCK(screen)) SDL_LockSurface(screen);
+	/* data */
+	for(y=0; y<qrcode->width; y++) {
+		row = qrcode->data+(y*qrcode->width);
+
+		for(x=0; x<qrcode->width; x++) {
+                        for(xx=0; xx<8; xx++){
+                                for(yy=0; yy<8; yy++){
+                                        if(row[x]&0x1) {
+                                                *((Uint32*)screen->pixels + (y * 8 + yy) * (qrcode->width*8) + x*8 + xx) = SDL_MapRGBA(screen->format, 0, 0, 0, 0);
+                                        } else {
+                                                *((Uint32*)screen->pixels + (y * 8 + yy) * (qrcode->width*8) + x*8 + xx) = SDL_MapRGBA(screen->format, 255, 255, 255, 255);
+                                        }
+                                }
+                        }
+		}
+
+	}
+        if (SDL_MUSTLOCK(screen)) SDL_UnlockSurface(screen);
+        SDL_Flip(screen);
+        sleep(10);
+
+        SDL_Quit();
+
+	return 0;
+}
+
 static QRcode *encode(const unsigned char *intext, int length)
 {
 	QRcode *code;
@@ -831,6 +872,9 @@ static void qrencode(const unsigned char *intext, int length, const char *outfil
 	}
 
 	switch(image_type) {
+		case SDL_TYPE:
+			writeSDL(qrcode);
+			break;
 		case PNG_TYPE:
 			writePNG(qrcode, outfile);
 			break;
@@ -1080,6 +1124,8 @@ int main(int argc, char **argv)
 					image_type = UTF8_TYPE;
 				} else if(strcasecmp(optarg, "ansiutf8") == 0) {
 					image_type = ANSIUTF8_TYPE;
+				} else if(strcasecmp(optarg, "sdl") == 0) {
+					image_type = SDL_TYPE;
 				} else {
 					fprintf(stderr, "Invalid image type: %s\n", optarg);
 					exit(EXIT_FAILURE);
