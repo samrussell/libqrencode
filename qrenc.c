@@ -829,7 +829,8 @@ static int writeSDL(QRcode *qrcode)
 	}
         if (SDL_MUSTLOCK(screen)) SDL_UnlockSurface(screen);
         SDL_Flip(screen);
-        sleep(10);
+        // this needs to be here in console, but not in JS
+        //sleep(10);
 
         SDL_Quit();
 
